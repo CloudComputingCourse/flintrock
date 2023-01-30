@@ -24,8 +24,9 @@ else:
 
 SCRIPTS_DIR = os.path.join(THIS_DIR, 'scripts')
 
-
 logger = logging.getLogger('flintrock.core')
+
+JAVA_VERSION = "11"
 
 
 class StorageDirs:
@@ -492,7 +493,7 @@ def run_against_hosts(*, partial_func: functools.partial, hosts: list):
             future.result()
 
 
-def get_java_major_version(client: paramiko.client.SSHClient):
+def get_java_major_version(client: paramiko.client.SSHClient) -> str:
     possible_cmds = [
         "$JAVA_HOME/bin/java -version",
         "java -version"
@@ -505,41 +506,47 @@ def get_java_major_version(client: paramiko.client.SSHClient):
                 command=command)
             tokens = output.split()
             # First line of the output is like: 'java version "1.8.0_20"'
-            # Get the version string and strip out the first two parts of the
-            # version as a tuple: (1, 8)
+            # Get the version string and join the first two parts of the
+            # version as a string: 1.8
             if len(tokens) >= 3:
                 version_parts = tokens[2].strip('"').split(".")
-                if len(version_parts) >= 2:
-                    return tuple(int(part) for part in version_parts[:2])
+                # for java version starting with 1 (e.g 1.xx.xx) return first two parts (i.e. 1.xx)
+                # for other version (e.g 11.0) only return the first part (i.e. 11)
+                if len(version_parts) >= 2 and version_parts[0] == '1':
+                    return ".".join(version_parts[:2])
+                else:
+                    return version_parts[0]
         except SSHError:
             pass
 
     return None
 
 
-def ensure_java8(client: paramiko.client.SSHClient):
+def ensure_java(client: paramiko.client.SSHClient, version: str):
     host = client.get_transport().getpeername()[0]
     java_major_version = get_java_major_version(client)
 
-    if not java_major_version or java_major_version < (1, 8):
-        logger.info("[{h}] Installing Java 1.8...".format(h=host))
+    if not java_major_version or java_major_version != version:
+        logger.info("[{h}] Installing Java{v}...".format(h=host, v=version))
 
         ssh_check_output(
             client=client,
             command="""
                 set -e
 
-                # Install Java 1.8 first to protect packages that depend on Java from being removed.
-                sudo yum install -y java-1.8.0-openjdk
+                # Install Java 11 first to protect packages that depend on Java from being removed.
+                sudo amazon-linux-extras enable java-openjdk{v} -y
+                sudo yum clean metadata -y
+                sudo yum install java-{v}-openjdk -y
 
-                # Remove any older versions of Java to force the default Java to 1.8.
+                # Remove any older versions of Java to force the default Java to specified version.
                 # We don't use /etc/alternatives because it does not seem to update links in /usr/lib/jvm correctly,
                 # and we don't just rely on JAVA_HOME because some programs use java directly in the PATH.
-                sudo yum remove -y java-1.6.0-openjdk java-1.7.0-openjdk
+                sudo yum remove -y java-1.6.0-openjdk java-1.7.0-openjdk java-1.8.0-openjdk
 
                 sudo sh -c "echo export JAVA_HOME=/usr/lib/jvm/jre >> /etc/environment"
                 source /etc/environment
-            """)
+            """.format(v=version))
 
 
 def setup_node(
@@ -590,7 +597,7 @@ def setup_node(
     cluster.storage_dirs.root = storage_dirs['root']
     cluster.storage_dirs.ephemeral = storage_dirs['ephemeral']
 
-    ensure_java8(ssh_client)
+    ensure_java(ssh_client, JAVA_VERSION)
 
     for service in services:
         try:

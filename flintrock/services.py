@@ -111,6 +111,7 @@ class HDFS(FlintrockService):
     def __init__(self, *, version, download_source):
         self.version = version
         self.download_source = download_source
+        self.name_node_ui_port = 50070 if version < '3.0' else 9870
         self.manifest = {'version': version, 'download_source': download_source}
 
     def install(
@@ -210,11 +211,14 @@ class HDFS(FlintrockService):
                         while [ "$master_ui_response_code" -ne 200 ]; do
                             sleep 1
                             master_ui_response_code="$(
-                                curl --head --silent --output /dev/null \
-                                    --write-out "%{{http_code}}" {m}:50070
+                                curl \
+                                    --location --head --silent \
+                                    --output /dev/null \
+                                    --write-out "%{{http_code}}" \
+                                    {m}:{p}
                             )"
                         done
-                    """.format(m=shlex.quote(cluster.master_host)),
+                    """.format(m=shlex.quote(cluster.master_host), p=self.name_node_ui_port),
                     timeout_seconds=90
                 )
                 break
@@ -229,7 +233,8 @@ class HDFS(FlintrockService):
     def health_check(self, master_host: str):
         # This info is not helpful as a detailed health check, but it gives us
         # an up / not up signal.
-        hdfs_master_ui = 'http://{m}:50070/webhdfs/v1/?op=GETCONTENTSUMMARY'.format(m=master_host)
+        hdfs_master_ui = 'http://{m}:{p}/webhdfs/v1/?op=GETCONTENTSUMMARY' \
+            .format(m=master_host, p=self.name_node_ui_port)
 
         try:
             json.loads(
@@ -285,8 +290,16 @@ class Spark(FlintrockService):
             client=ssh_client,
             command="""
                 set -e
+                # introduce python3.8
+                sudo amazon-linux-extras enable python3.8 -y
+                sudo yum clean metadata -y
+                sudo yum install python38 -y
+                # default python3 to point to python3.8
+                sudo ln -sf /usr/bin/python3.8 /usr/bin/python3
+
+                # other dependencies
                 sudo yum update -y
-                sudo yum install git libcurl python3 -y
+                sudo yum install git libcurl -y
                 pip3 install --user warc3-wet beautifulsoup4
                 echo "export PYSPARK_PYTHON='/usr/bin/python3'" >> ~/.bash_profile
                 """)
@@ -311,8 +324,12 @@ class Spark(FlintrockService):
                 client=ssh_client,
                 command="""
                     set -e
+                    # introduce java-openjdk11
+                    sudo amazon-linux-extras enable java-openjdk11 -y
+                    sudo yum clean metadata -y
+                    sudo yum install java-11-openjdk
+                    # other dependencies
                     sudo yum install -y git
-                    sudo yum install -y java-devel
                     """)
             ssh_check_output(
                 client=ssh_client,
