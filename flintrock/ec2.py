@@ -565,8 +565,8 @@ def get_or_create_flintrock_security_groups(
             # HDFS
             SecurityGroupRule(
                 ip_protocol='tcp',
-                from_port=50070,
-                to_port=50070,
+                from_port=9870,
+                to_port=9870,
                 cidr_ip=flintrock_client_cidr,
                 src_group=None),
             # Spark
