@@ -562,7 +562,14 @@ def get_or_create_flintrock_security_groups(
                 to_port=22,
                 cidr_ip=flintrock_client_cidr,
                 src_group=None),
-            # HDFS
+            # HDFS 2 (for backward compatibility)
+            SecurityGroupRule(
+                ip_protocol='tcp',
+                from_port=50070,
+                to_port=50070,
+                cidr_ip=flintrock_client_cidr,
+                src_group=None),
+            # HDFS >= 3
             SecurityGroupRule(
                 ip_protocol='tcp',
                 from_port=9870,
