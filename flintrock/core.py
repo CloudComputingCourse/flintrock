@@ -585,14 +585,20 @@ def setup_node(
     logger.info("[{h}] Configuring ephemeral storage...".format(h=host))
     # TODO: Print some kind of warning if storage is large, since formatting
     #       will take several minutes (~4 minutes for 2TB).
-    storage_dirs_raw = ssh_check_output(
-        client=ssh_client,
-        command="""
-            set -e
-            python /tmp/setup-ephemeral-storage.py
-            rm -f /tmp/setup-ephemeral-storage.py
-        """)
-    storage_dirs = json.loads(storage_dirs_raw)
+    try: 
+        storage_dirs_raw = ssh_check_output(
+            client=ssh_client,
+            command="""
+                set -e
+                python /tmp/setup-ephemeral-storage.py
+                rm -f /tmp/setup-ephemeral-storage.py
+            """)
+        storage_dirs = json.loads(storage_dirs_raw)
+    except:
+        print("")
+        
+    cluster.storage_dirs.root = "/media/root"
+    cluster.storage_dirs.ephemeral = []
 
     cluster.storage_dirs.root = storage_dirs['root']
     cluster.storage_dirs.ephemeral = storage_dirs['ephemeral']
