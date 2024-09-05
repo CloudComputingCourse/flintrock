@@ -599,10 +599,7 @@ def setup_node(
         
     cluster.storage_dirs.root = "/media/root"
     cluster.storage_dirs.ephemeral = []
-
-    cluster.storage_dirs.root = storage_dirs['root']
-    cluster.storage_dirs.ephemeral = storage_dirs['ephemeral']
-
+            
     ensure_java(ssh_client, JAVA_VERSION)
 
     for service in services:
